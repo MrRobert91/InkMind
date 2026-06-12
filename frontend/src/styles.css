@@ -797,6 +797,72 @@ label > select {
   50% { opacity: 1; }
 }
 
+/* ---------- AI settings ---------- */
+
+.provider-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.provider-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.85rem;
+}
+
+.provider-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink-muted);
+}
+
+.provider-pill.ok .provider-dot {
+  background: #7fb069;
+}
+
+.provider-pill.ok {
+  border-color: #3d4a35;
+}
+
+.task-setting {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+  padding: 0.9rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.task-setting:last-child {
+  border-bottom: none;
+}
+
+.task-info p {
+  margin: 0.2rem 0 0;
+}
+
+.nav-secondary {
+  margin-top: 0.8rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.8rem !important;
+  font-size: 0.85rem !important;
+}
+
+code {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.05rem 0.3rem;
+  font-size: 0.85em;
+}
+
 /* ---------- Responsive ---------- */
 
 @media (max-width: 900px) {
@@ -823,7 +889,8 @@ label > select {
   .overview-grid,
   .editor-layout.with-versions,
   .form-row,
-  .character-fields {
+  .character-fields,
+  .task-setting {
     grid-template-columns: 1fr;
   }
 

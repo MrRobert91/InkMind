@@ -74,3 +74,20 @@ export interface EditAction {
   id: string;
   description: string;
 }
+
+export interface Provider {
+  id: string;
+  label: string;
+  configured: boolean;
+  requires_key: boolean;
+  env: string;
+  default_model: string;
+  suggested_models: string[];
+}
+
+export interface TaskSetting {
+  task: string;
+  label: string;
+  provider: string;
+  model: string;
+}

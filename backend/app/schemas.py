@@ -183,3 +183,13 @@ class EditFragmentOut(BaseModel):
 
 class StorySummaryOut(BaseModel):
     summary: str
+
+
+class TaskSettingIn(BaseModel):
+    task: str
+    provider: str
+    model: str = ""
+
+
+class TaskSettingOut(TaskSettingIn):
+    label: str = ""

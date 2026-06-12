@@ -1,19 +1,17 @@
-"""Narrative AI copilot built on the Anthropic API.
+"""Narrative AI copilot.
 
-Every call assembles a structured project context (premise, framework,
-characters, chapter map) so the model answers as a project-aware
-co-writer instead of a generic text generator.
+Builds the prompts and structured project context (premise, framework,
+characters, chapter map) and delegates the actual model call to `llm.py`,
+which routes each task to whatever provider+model the user configured.
 """
 
 import json
-import os
 
-import anthropic
-from fastapi import HTTPException
+from sqlalchemy.orm import Session
 
+from . import llm
+from .llm import handle_ai_errors  # re-exported for the routers  # noqa: F401
 from .models import Chapter, Project
-
-MODEL = "claude-opus-4-8"
 
 FRAMEWORKS = {
     "three_acts": "Estructura en tres actos: planteamiento, confrontación y resolución.",
@@ -37,14 +35,12 @@ EDIT_ACTIONS = {
     "analyze": "Analiza qué función cumple este fragmento dentro de la historia y señala posibles problemas (exposición excesiva, falta de conflicto, incoherencias).",
 }
 
-
-def _client() -> anthropic.Anthropic:
-    if not os.getenv("ANTHROPIC_API_KEY"):
-        raise HTTPException(
-            status_code=503,
-            detail="ANTHROPIC_API_KEY no está configurada. Añádela al archivo .env y reinicia el backend.",
-        )
-    return anthropic.Anthropic()
+SYSTEM_BASE = """Eres InkMind, un copiloto narrativo para escritores de relatos y novelas. \
+Actúas como mentor creativo, editor literario, estructurador narrativo, analista de coherencia y lector beta. \
+Nunca sustituyes al autor: propones opciones, haces preguntas, detectas problemas y sugieres mejoras, \
+pero el control creativo siempre es suyo. Responde siempre en el idioma del autor (por defecto español). \
+Sé concreto y útil: cuando propongas alternativas, numéralas; cuando detectes un problema, explica por qué lo es \
+y cómo podría resolverse. Usa la información del proyecto que se te proporciona y mantén la coherencia con ella."""
 
 
 def build_project_context(project: Project, current_chapter: Chapter | None = None) -> str:
@@ -97,39 +93,12 @@ def build_project_context(project: Project, current_chapter: Chapter | None = No
     return "\n".join(lines)
 
 
-SYSTEM_BASE = """Eres InkMind, un copiloto narrativo para escritores de relatos y novelas. \
-Actúas como mentor creativo, editor literario, estructurador narrativo, analista de coherencia y lector beta. \
-Nunca sustituyes al autor: propones opciones, haces preguntas, detectas problemas y sugieres mejoras, \
-pero el control creativo siempre es suyo. Responde siempre en el idioma del autor (por defecto español). \
-Sé concreto y útil: cuando propongas alternativas, numéralas; cuando detectes un problema, explica por qué lo es \
-y cómo podría resolverse. Usa la información del proyecto que se te proporciona y mantén la coherencia con ella."""
-
-
-def _system_blocks(context: str) -> list[dict]:
-    # Stable instructions first, project context cached as the prefix breakpoint.
-    return [
-        {"type": "text", "text": SYSTEM_BASE},
-        {
-            "type": "text",
-            "text": f"CONTEXTO DEL PROYECTO:\n{context}",
-            "cache_control": {"type": "ephemeral"},
-        },
-    ]
-
-
-def chat_reply(project: Project, history: list[dict], current_chapter: Chapter | None = None) -> str:
+def chat_reply(
+    db: Session, project: Project, history: list[dict], current_chapter: Chapter | None = None
+) -> str:
     """Project-aware chat. `history` is a list of {role, content} dicts ending with the user turn."""
-    client = _client()
     context = build_project_context(project, current_chapter)
-    with client.messages.stream(
-        model=MODEL,
-        max_tokens=8000,
-        thinking={"type": "adaptive"},
-        system=_system_blocks(context),
-        messages=history[-30:],
-    ) as stream:
-        message = stream.get_final_message()
-    return _text_of(message)
+    return llm.complete(db, "chat", SYSTEM_BASE, context, history[-30:], max_tokens=8000)
 
 
 STRUCTURE_SCHEMA = {
@@ -157,13 +126,16 @@ STRUCTURE_SCHEMA = {
 
 
 def generate_structure(
-    project: Project, framework: str, num_chapters: int | None, instructions: str
+    db: Session, project: Project, framework: str, num_chapters: int | None, instructions: str
 ) -> list[dict]:
     """Generate an editable chapter map following the chosen narrative framework."""
-    client = _client()
     context = build_project_context(project)
     framework_desc = FRAMEWORKS.get(framework, framework)
-    target = f"aproximadamente {num_chapters} capítulos" if num_chapters else "el número de capítulos que mejor sirva a la historia (entre 8 y 20)"
+    target = (
+        f"aproximadamente {num_chapters} capítulos"
+        if num_chapters
+        else "el número de capítulos que mejor sirva a la historia (entre 8 y 20)"
+    )
 
     prompt = (
         f"Genera un esquema de capítulos para esta obra usando la estructura: {framework_desc}\n"
@@ -175,22 +147,20 @@ def generate_structure(
     if instructions:
         prompt += f"\nInstrucciones adicionales del autor: {instructions}"
 
-    response = client.messages.create(
-        model=MODEL,
+    raw = llm.complete(
+        db, "structure", SYSTEM_BASE, context,
+        [{"role": "user", "content": prompt}],
         max_tokens=16000,
-        system=_system_blocks(context),
-        messages=[{"role": "user", "content": prompt}],
-        output_config={"format": {"type": "json_schema", "schema": STRUCTURE_SCHEMA}},
+        schema=STRUCTURE_SCHEMA,
     )
-    data = json.loads(_text_of(response))
+    data = json.loads(raw)
     return data["chapters"]
 
 
 def edit_fragment(
-    project: Project, fragment: str, action: str, instructions: str, chapter: Chapter | None
+    db: Session, project: Project, fragment: str, action: str, instructions: str, chapter: Chapter | None
 ) -> str:
     """Apply a targeted editorial action to a selected fragment."""
-    client = _client()
     context = build_project_context(project, chapter)
     action_prompt = EDIT_ACTIONS.get(action, action)
 
@@ -207,20 +177,13 @@ def edit_fragment(
             "y sin comentarios adicionales, para que pueda sustituir directamente al original."
         )
 
-    with client.messages.stream(
-        model=MODEL,
-        max_tokens=8000,
-        thinking={"type": "adaptive"},
-        system=_system_blocks(context),
-        messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        message = stream.get_final_message()
-    return _text_of(message)
+    return llm.complete(
+        db, "edit", SYSTEM_BASE, context, [{"role": "user", "content": prompt}], max_tokens=8000
+    )
 
 
-def story_summary(project: Project) -> str:
+def story_summary(db: Session, project: Project) -> str:
     """Editor-style report on the current state of the story."""
-    client = _client()
     context = build_project_context(project)
     prompt = (
         "Actúa como editor literario y genera un informe del estado actual de esta historia:\n"
@@ -231,43 +194,6 @@ def story_summary(project: Project) -> str:
         "4. Próximos pasos sugeridos (3-5 tareas concretas).\n"
         "Sé honesto y específico; cita capítulos y personajes por su nombre."
     )
-    with client.messages.stream(
-        model=MODEL,
-        max_tokens=10000,
-        thinking={"type": "adaptive"},
-        system=_system_blocks(context),
-        messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        message = stream.get_final_message()
-    return _text_of(message)
-
-
-def _text_of(message) -> str:
-    if message.stop_reason == "refusal":
-        raise HTTPException(status_code=422, detail="El modelo declinó esta petición.")
-    text = "".join(block.text for block in message.content if block.type == "text")
-    if not text:
-        raise HTTPException(status_code=502, detail="El modelo no devolvió texto.")
-    return text
-
-
-def handle_ai_errors(fn):
-    """Decorator translating Anthropic SDK errors into HTTP responses."""
-    from functools import wraps
-
-    @wraps(fn)
-    def wrapper(*args, **kwargs):
-        try:
-            return fn(*args, **kwargs)
-        except HTTPException:
-            raise
-        except anthropic.AuthenticationError:
-            raise HTTPException(status_code=503, detail="ANTHROPIC_API_KEY inválida.")
-        except anthropic.RateLimitError:
-            raise HTTPException(status_code=429, detail="Límite de peticiones de la API de Anthropic alcanzado. Inténtalo en unos segundos.")
-        except anthropic.APIStatusError as e:
-            raise HTTPException(status_code=502, detail=f"Error de la API de Anthropic: {e.message}")
-        except anthropic.APIConnectionError:
-            raise HTTPException(status_code=502, detail="No se pudo conectar con la API de Anthropic.")
-
-    return wrapper
+    return llm.complete(
+        db, "summary", SYSTEM_BASE, context, [{"role": "user", "content": prompt}], max_tokens=10000
+    )

@@ -1,27 +1,23 @@
 services:
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: inkmind
-      POSTGRES_PASSWORD: inkmind
-      POSTGRES_DB: inkmind
-    volumes:
-      - inkmind_pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U inkmind"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   backend:
     build: ./backend
     environment:
-      DATABASE_URL: postgresql://inkmind:inkmind@db:5432/inkmind
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      DATABASE_URL: sqlite:////data/inkmind.db
       CORS_ORIGINS: ${CORS_ORIGINS:-*}
-    depends_on:
-      db:
-        condition: service_healthy
+      # Proveedores de IA: configura los que quieras usar en el archivo .env
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      XAI_API_KEY: ${XAI_API_KEY:-}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      HF_TOKEN: ${HF_TOKEN:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
+      OLLAMA_API_KEY: ${OLLAMA_API_KEY:-}
+      CUSTOM_OPENAI_BASE_URL: ${CUSTOM_OPENAI_BASE_URL:-}
+      CUSTOM_OPENAI_API_KEY: ${CUSTOM_OPENAI_API_KEY:-}
+    volumes:
+      - inkmind_data:/data
     ports:
       - "8000:8000"
 
@@ -33,4 +29,4 @@ services:
       - "3000:80"
 
 volumes:
-  inkmind_pgdata:
+  inkmind_data:

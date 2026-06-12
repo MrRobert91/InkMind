@@ -100,6 +100,17 @@ class Character(Base):
     project: Mapped[Project] = relationship(back_populates="characters")
 
 
+class AISetting(Base):
+    """Per-task model routing: which provider+model runs each AI task."""
+
+    __tablename__ = "ai_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    task: Mapped[str] = mapped_column(String(40), unique=True, nullable=False)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False)
+    model: Mapped[str] = mapped_column(String(255), default="")
+
+
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
 

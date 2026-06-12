@@ -3,7 +3,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import models  # noqa: F401 — register models with the metadata
+from . import llm, models  # noqa: F401 — register models with the metadata
 from .database import Base, engine, wait_for_db
 from .routers import ai, chapters, characters, projects
 
@@ -33,5 +33,6 @@ def on_startup():
 def health():
     return {
         "status": "ok",
-        "ai_configured": bool(os.getenv("ANTHROPIC_API_KEY")),
+        "ai_configured": llm.default_provider() is not None,
+        "providers": [p["id"] for p in llm.providers_info() if p["configured"]],
     }

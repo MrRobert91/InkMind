@@ -51,9 +51,14 @@ export default function Dashboard() {
           <h1 className="brand">InkMind</h1>
           <p className="tagline">Tu copiloto narrativo: tú escribes, la IA acompaña.</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowForm(true)}>
-          + Nuevo proyecto
-        </button>
+        <div className="page-actions">
+          <Link to="/settings" className="btn">
+            ⚙ Configuración IA
+          </Link>
+          <button className="btn btn-primary" onClick={() => setShowForm(true)}>
+            + Nuevo proyecto
+          </button>
+        </div>
       </header>
 
       {error && <div className="alert">{error}</div>}
