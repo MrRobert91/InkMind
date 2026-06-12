@@ -6,6 +6,8 @@ import type {
   EditAction,
   Framework,
   Project,
+  Provider,
+  TaskSetting,
 } from "./types";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -108,6 +110,15 @@ export const api = {
     }),
   storySummary: (projectId: number) =>
     request<{ summary: string }>(`/api/projects/${projectId}/summary`, { method: "POST" }),
+
+  // AI provider settings
+  listProviders: () => request<Provider[]>("/api/ai/providers"),
+  getTaskSettings: () => request<TaskSetting[]>("/api/ai/task-settings"),
+  saveTaskSettings: (settings: TaskSetting[]) =>
+    request<TaskSetting[]>("/api/ai/task-settings", {
+      method: "PUT",
+      body: JSON.stringify(settings),
+    }),
 };
 
 export const FRAMEWORK_LABELS: Record<string, string> = {

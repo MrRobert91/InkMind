@@ -39,6 +39,9 @@ export default function ProjectLayout() {
             <NavLink to="board">Tablero</NavLink>
             <NavLink to="characters">Personajes</NavLink>
             <NavLink to="chat">Asistente IA</NavLink>
+            <NavLink to="/settings" className="nav-secondary">
+              ⚙ Configuración IA
+            </NavLink>
           </nav>
         </aside>
         <main className="project-main">

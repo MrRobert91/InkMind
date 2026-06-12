@@ -6,11 +6,13 @@ import Board from "./pages/Board";
 import Characters from "./pages/Characters";
 import Chat from "./pages/Chat";
 import ChapterEditor from "./pages/ChapterEditor";
+import Settings from "./pages/Settings";
 
 export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Dashboard />} />
+      <Route path="/settings" element={<Settings />} />
       <Route path="/projects/:projectId" element={<ProjectLayout />}>
         <Route index element={<Navigate to="overview" replace />} />
         <Route path="overview" element={<Overview />} />
